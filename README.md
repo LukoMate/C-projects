@@ -1,2 +1,2 @@
-# C++-projects
+# C++ projects
 Home made fun codes
