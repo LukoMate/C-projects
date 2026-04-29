@@ -1,0 +1,425 @@
+#include <signal.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <stdio.h>
+
+
+
+struct WineRecord{
+    char name[20];
+    char table[20];
+    char grape_type[20];
+    int area;              // négyszögöl 
+    int destruction;       //%
+};
+
+char file[] = "boraszat.dat";   
+
+void append(struct WineRecord* x)
+{
+    int f = open(file, O_APPEND | O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    if (f!=-1) printf("Fájl sikeresen létrehozva!\n");
+    else{
+        perror("Sikeretelen fajl letrehozas."); return;
+    }
+
+    int w = write(f, x, sizeof(*x));
+    if (w!=-1) printf("Rekord sikeresen hozzáadva!\n");
+    else{
+        perror("Sikeretelen hozzáadása rekordnak:\n"); return;
+    }
+
+    close(f);
+}
+
+void show_full()
+{
+    int index = 0;
+    int f = open(file, O_RDONLY, S_IRUSR | S_IWUSR);
+    if (f==-1) {perror("Hiba show()-ban"); return;}
+
+    struct WineRecord temp;
+    while (read(f, &temp, sizeof(temp)) > 0)
+    {   
+        printf("%d\n", ++index);
+        printf("Név: %s , Tábla: %s , Fajta: %s , Terület: %d négyszögöl, Pusztítás: %d%%\n",
+               temp.name, temp.table, temp.grape_type, temp.area, temp.destruction);
+    }
+    close(f);
+}
+
+void show_bytable(const char* t)
+{
+    int f = open(file, O_RDONLY, S_IRUSR | S_IWUSR);
+    if (f==-1) {perror("Hiba show()-ban"); return;}
+
+    struct WineRecord temp;
+    while (read(f, &temp, sizeof(temp)) > 0)
+    {
+        if (strcmp(temp.table, t) == 0){
+            printf("Név: %s , Tábla: %s , Fajta: %s , Terület: %d négyszögöl, Pusztítás: %d%%\n",
+                   temp.name, temp.table, temp.grape_type, temp.area, temp.destruction);
+        }
+    }
+}
+
+void show_bygrape_type(const char* g)
+{
+    int f = open(file, O_RDONLY, S_IRUSR | S_IWUSR);
+    if (f==-1) {perror("Hiba show()-ban"); return;}
+
+    struct WineRecord temp;
+    while (read(f, &temp, sizeof(temp)) > 0)
+    {
+        if (strcmp(temp.grape_type, g) == 0){
+            printf("Név: %s , Tábla: %s , Fajta: %s , Terület: %d négyszögöl, Pusztítás: %d%%\n",
+                   temp.name, temp.table, temp.grape_type, temp.area, temp.destruction);
+        }
+    }
+}
+
+void delete(int i)
+{
+    int f = open(file, O_RDWR, S_IRUSR | S_IWUSR);
+    if (f==-1) {perror("Hiba delete()-ben"); return;}
+
+
+    struct WineRecord temp;
+    if (lseek(f, (i+1) * sizeof(struct WineRecord), SEEK_SET) < 0)
+    {
+        {perror("Hiba delete()-ben"); return;}
+    }
+
+    while (read(f, &temp, sizeof(temp)) > 0)
+    {
+        if (lseek(f, i *sizeof(struct WineRecord), SEEK_SET) < 0)
+        {
+            perror("Hiba delete()-ben"); return;
+        }
+
+        if (write(f, &temp, sizeof(temp)) < 0)
+        {
+            perror("Hiba delete()-ben"); return;
+        }
+
+        if (lseek(f, (i+1) *sizeof(struct WineRecord), SEEK_SET) < 0)
+        {
+            perror("Hiba delete()-ben"); return;
+        }
+
+        i++;
+    }
+
+    if (ftruncate(f, lseek(f, 0, SEEK_END) - sizeof(struct WineRecord)) < 0)
+    {
+        perror("Hiba delete()-ben"); return;
+    }
+
+
+    close(f);
+}
+
+void update(int i)
+{
+    int f = open(file, O_RDWR, S_IRUSR | S_IWUSR);
+    if (f==-1) {perror("Hiba update()-ban"); return;}
+
+    struct WineRecord temp;
+    if(lseek(f, (i) * sizeof(temp), SEEK_SET) < 0) {
+        perror("Hiba update()-ban"); return;
+    }
+
+    int r = (read(f, &temp, sizeof(temp)));
+
+    if (r < 0) {
+        perror("Hiba update()-ban"); return;
+    }
+    else if (r == 0) {
+        printf("Nincs mit módosítani.\n"); return;
+    }
+
+    int u_choice;
+
+    do {
+        printf("Melyik adaton szeretne módosítani?\n");
+        printf("0 - Kilépés\n");
+        printf("1 - Termőhely neve (%s)\n", temp.name);
+        printf("2 - Tábla neve (%s)\n", temp.table);
+        printf("3 - Szőlő típusa (%s)\n", temp.grape_type);
+        printf("4 - Terület (%d)\n", temp.area);
+        printf("5 - Pusztítás %% nélkül %d%%\n", temp.destruction);
+        printf("Választás: ");
+        scanf("%d", &u_choice);
+        getchar();
+    
+        switch(u_choice)
+        {
+            case 0:
+                break;
+
+            case 1:
+                printf("Új termőhely: ");
+                fgets(temp.name, sizeof(temp.name), stdin);
+                temp.name[strcspn(temp.name, "\n")] = 0;
+                break;
+
+            case 2:
+                printf("Új tábla: ");
+                fgets(temp.table, sizeof(temp.table), stdin);
+                temp.table[strcspn(temp.table, "\n")] = 0;
+                break;
+
+            case 3:
+                printf("Új szőlő típus: ");
+                fgets(temp.grape_type, sizeof(temp.grape_type), stdin);
+                temp.grape_type[strcspn(temp.grape_type, "\n")] = 0;
+                break;
+
+            case 4:
+                printf("Új terület (négyszögölben): ");
+                scanf("%d", &temp.area);
+                getchar();
+                break;
+
+            case 5:
+                printf("Új pusztítás (%%): ");
+                scanf("%d", &temp.destruction);
+                getchar();
+                break;
+
+            default:
+                printf("Érvénytelen választás!\n");
+        }
+    } while (u_choice != 0);
+
+    lseek(f, -sizeof(temp), SEEK_CUR);
+    if (write(f, &temp, sizeof(temp)) < 0)
+    {
+        perror("Hiba update()-ban"); return;
+    }
+
+    close(f);
+}
+
+
+int choice;
+
+
+//------------------------------------------------------------ 2. rész:
+
+
+void handler2(int signum)
+{
+    printf("MEGSEMMISÍTVE");
+}
+
+void handler3(int signum)
+{
+    printf("LEVÉDVE");
+}
+
+int main()
+{
+    int pipefd_megsemmisito[2];
+    pipe(pipefd_megsemmisito);
+    int pipefd_vedelmezo[2];
+    pipe(pipefd_vedelmezo);
+    
+    sigset_t sigset;
+    sigemptyset(&sigset);    // Inicializáljuk a készletet
+    sigfillset(&sigset);     // Feltoltjuk
+    sigdelset(&sigset, SIGINT);  //biztonság kedvéért nem blokkolom ctrl+c
+    sigprocmask(SIG_SETMASK, &sigset, NULL); //Blokkoljuk a szignálokat amiket betettünk
+
+
+    signal(SIGRTMIN+1, handler2);
+    signal(SIGRTMIN+2, handler3);
+
+    pid_t destroyer = fork();
+    if (destroyer == 0)
+    {
+        struct WineRecord r;
+
+        //teszt hadler nelkuli signalozas:
+        kill(getppid(), SIGUSR1);
+        while (read(pipefd_megsemmisito[0], &r, sizeof(r)) > 0)
+        {
+            printf("Megsemmisítedő állomány: %s", r.name);
+            /*
+            PL: Tisztelt Somló hegyközség, Déli T1, Olaszrizling tábla főmérnöke! 
+            Az országos hegybíró utasítására, az aranyszínű sárgaság betegség védekezés keretében, 
+            azonnal kérem megsemmisíteni a táblát.
+            */
+        }
+        //ez kell ide? :
+        close(pipefd_megsemmisito[0]); //??
+
+        kill(getppid(), SIGRTMIN+1);  //jelzés h végzett, akár 1 handlerrel is lehete if else benne 
+        // kill(getppid(), SIGTERM);  ezzel kilonenk a szulot
+        return 0;
+    }
+
+    pid_t protecter = fork();
+    if (protecter == 0)
+    {
+        struct WineRecord r;
+        kill(getppid(), SIGUSR2);
+        while (read(pipefd_vedelmezo[0], &r, sizeof(r)) > 0)
+        {
+            printf("Megsemmisítedő állomány: %s", r.name);
+        }
+
+        close(pipefd_vedelmezo[0]);
+        
+        kill(getppid(), SIGRTMIN+2);
+        return 0;
+    }
+
+    siginfo_t info;
+    int sent_signal = sigwaitinfo(&sigset, &info);
+
+    if (sent_signal == SIGUSR2)
+    {
+        int f = open(file, O_RDWR, S_IRUSR | S_IWUSR);
+        if (f==-1) {perror("Hiba a szülőben"); return 1;}
+
+        struct WineRecord r;
+
+        while (read(f, &r, sizeof(r)) > 0)
+        {   
+            if(r.destruction >= 30)
+            {
+                write(pipefd_megsemmisito[1], &r, sizeof(r)) > 0;
+            }
+        }
+        close(f);
+    }
+
+    if (sent_signal == SIGUSR1) //EZ A SIGNAL MASRA VAN MAJD AT KELL IRNI
+    {
+        int f = open(file, O_RDWR, S_IRUSR | S_IWUSR);
+        if (f==-1) {perror("Hiba a szülőben"); return 1;}
+
+        struct WineRecord r;
+
+        while (read(f, &r, sizeof(r)) > 0)
+        {   
+            if(r.destruction < 30)
+            {
+                write(pipefd_vedelmezo[1], &r, sizeof(r)) > 0;
+            }
+        }
+        close(f);
+    }
+
+    close(pipefd_megsemmisito[1]);
+    close(pipefd_vedelmezo[1]);
+
+    //2 gyerekre való váarkozás
+    wait(NULL);
+    wait(NULL);
+    
+    //ide kell még egy jelentése a mezogazdsagi miniszterek
+
+    printf("Üdv az adatkezelőben!\n");
+
+    do {
+        printf("----------------------------------------------------\n");
+        printf("Válassz a menüből: \n");
+
+        printf("0 - Kilépés\n");
+        printf("1 - Adat hozzáadás\n");
+        printf("2 - Rekord módosítása\n");
+        printf("3 - Rekord törlése\n");
+        printf("4 - Teljes lista\n");
+        printf("5 - Lista termőhely szerint\n");
+        printf("6 - Lista szőlő típus szerint\n");
+        pritf("7 - Védekezés\n");
+        printf("Választás: ");
+        scanf("%d", &choice);
+        getchar();
+
+        switch (choice) {
+        case 1:
+            printf("Adatok megadása...\n");
+            struct WineRecord w;
+            
+            printf("Termőhely: ");
+
+            fgets(w.name, sizeof(w.name), stdin);
+            w.name[strcspn(w.name, "\n")] = 0;
+
+            printf("Tábla: ");
+            fgets(w.table, sizeof(w.table), stdin);
+            w.table[strcspn(w.table, "\n")] = 0;
+
+            printf("Szőlő típusa: ");
+            fgets(w.grape_type, sizeof(w.grape_type), stdin);
+            w.grape_type[strcspn(w.grape_type, "\n")] = 0;
+            //igy lecsipjuk \n-t és a szokozzel se lesz gond
+
+            printf("Terület: ");
+            scanf(" %d", &w.area);
+            
+            printf("Pusztulás (%% nélkül): ");
+            scanf(" %d", &w.destruction);
+            
+            append(&w);
+            break;
+
+        case 2:
+            // módosítás
+            show_full();
+            printf("Hanyadik rekordot szeretné módosítani? ");
+            int n;
+            scanf("%d", &n);
+            update(n-1);
+            break;
+
+        case 3:
+        {
+            // törlés
+            show_full();
+            printf("Hanyadik rekordot szeretné törölni? ");
+            int n;
+            scanf("%d", &n);
+            delete(n-1);
+            break; 
+        }
+
+        case 4:
+            show_full();
+            break;
+
+        case 5:
+        {
+            char c[20]; 
+            printf("Kérek egy termőhelyet a listázáshoz: ");
+            scanf("%s", c);
+            show_bytable(c);
+            break;
+        }
+
+        case 6:
+            char c[20];
+            printf("Kérek egy szőlő típust a listázáshoz: ");
+            scanf("%s", c);
+            show_bygrape_type(c);
+            break;
+
+        case 7:
+
+
+        case 0:
+            printf("Kilépés\n");
+            break;
+
+        default:
+            printf("Érvénytelen választás!\n");
+        }
+    } while (choice);
+};
