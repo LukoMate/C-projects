@@ -9,7 +9,7 @@ struct Foo
 	
 	Foo(vector<int>& v) : v1(v) { std::cout << "copy "; }
 	
-	Foo(vector<int>&& v) : v1(move(v)) { std::cout << "move "; }
+	Foo(vector<int>&& v) : v1(move(v)) { std::cout << "move "; }  // we need move(v) so vector<int>&& v won't be lvalue
 	vector <int> v1;
 };
 
