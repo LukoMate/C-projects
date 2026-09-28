@@ -35,6 +35,9 @@ int main() {
     b1->print();
     std::cout << b1->getName() << '\n';
 
+    //ha nem vitrualis metodust hivunk meg akkor a static tipust (itt az a base)
+    //h avirtualis akkor a valos (dinamikus) tipus dönt
+
 
     Base b2 = Derived(); //object slicing
     b2.print();
